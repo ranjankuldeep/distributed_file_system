@@ -20,7 +20,7 @@ func (p PathKey) FirstPathName() string {
 	return paths[0]
 }
 
-// Returns the full path excluding the root folder.
+// Returns the full path excluding the root folder with the filename.
 // Eg- dslkjfdsf/jdfsfj/fdsf/dnf/<filename>
 func (p PathKey) FullPath() string {
 	return fmt.Sprintf("%s/%s", p.PathName, p.Filename)
