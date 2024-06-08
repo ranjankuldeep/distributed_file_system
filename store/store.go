@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -36,6 +37,13 @@ type PathTransformFunc func(string) PathKey
 
 func (s *Store) Clear() error {
 	return os.RemoveAll(s.Root)
+}
+func (s *Store) Has(id string, key string) bool {
+	pathKey := s.PathTransformFunc(key)
+	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FullPath())
+
+	_, err := os.Stat(fullPathWithRoot)
+	return !errors.Is(err, os.ErrNotExist)
 }
 
 func (s *Store) Delete(id string, key string) error {

@@ -1,9 +1,7 @@
 package store
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -24,12 +22,4 @@ func (p PathKey) FirstPathName() string {
 // Eg- dslkjfdsf/jdfsfj/fdsf/dnf/<filename>
 func (p PathKey) FullPath() string {
 	return fmt.Sprintf("%s/%s", p.PathName, p.Filename)
-}
-
-func (s *Store) Has(id string, key string) bool {
-	pathKey := s.PathTransformFunc(key)
-	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FullPath())
-
-	_, err := os.Stat(fullPathWithRoot)
-	return !errors.Is(err, os.ErrNotExist)
 }
