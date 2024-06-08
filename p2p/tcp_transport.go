@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
+
+	"github.com/ranjankuldeep/distributed_file_system/logs"
 )
 
 // TCPPeer represents the remote node over a TCP established connection.
@@ -93,7 +94,7 @@ func (t *TCPTransport) ListenAndAccept() error {
 		return err
 	}
 	go t.startAcceptLoop()
-	log.Printf("TCP transport listening on port: %s\n", t.ListenAddr)
+	logs.Logger.Infof("TCP transport listening on port: %s\n", t.ListenAddr)
 	return nil
 }
 
@@ -113,7 +114,7 @@ func (t *TCPTransport) startAcceptLoop() {
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 	defer func() {
-		fmt.Printf("dropping peer connection: %s", err)
+		logs.Logger.Infof("dropping peer connection: %s", err)
 		conn.Close()
 	}()
 
