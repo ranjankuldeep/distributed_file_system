@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 )
@@ -44,6 +45,27 @@ func (s *Store) Delete(id string, key string) error {
 	}()
 	firstPathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FirstPathName())
 	return os.RemoveAll(firstPathNameWithRoot)
+}
+
+func (s *Store) Read(id string, key string) (int64, io.Reader, error) {
+	return s.readStream(id, key)
+}
+
+func (s *Store) readStream(id string, key string) (int64, io.ReadCloser, error) {
+	pathKey := s.PathTransformFunc(key)
+	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FullPath())
+
+	file, err := os.Open(fullPathWithRoot)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	fi, err := file.Stat()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return fi.Size(), file, nil
 }
 
 var DefaultPathTransformFunc = func(key string) PathKey {
