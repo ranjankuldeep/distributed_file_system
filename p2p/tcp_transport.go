@@ -5,40 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 
 	"github.com/ranjankuldeep/distributed_file_system/logs"
 )
-
-// TCPPeer represents the remote node over a TCP established connection.
-// Will hold the meta data of the peer
-type TCPPeer struct {
-	// The underlying connection of the peer. Which in this case
-	// is a TCP connection.
-	net.Conn
-	// if we dial and retrieve a conn => outbound == true
-	// if we accept and retrieve a conn => outbound == false
-	outbound bool
-	wg       *sync.WaitGroup
-}
-
-func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
-	return &TCPPeer{
-		Conn:     conn,
-		outbound: outbound,
-		wg:       &sync.WaitGroup{},
-	}
-}
-
-func (p *TCPPeer) CloseStream() {
-	p.wg.Done()
-}
-
-// Send Message to the peer.
-func (p *TCPPeer) Send(b []byte) error {
-	_, err := p.Conn.Write(b)
-	return err
-}
 
 type TCPTransportOpts struct {
 	ListenAddr    string // Holds the address where a peer is listening.
@@ -98,6 +67,7 @@ func (t *TCPTransport) ListenAndAccept() error {
 	return nil
 }
 
+// A blocking loop.
 func (t *TCPTransport) startAcceptLoop() {
 	for {
 		conn, err := t.listener.Accept()
@@ -107,7 +77,6 @@ func (t *TCPTransport) startAcceptLoop() {
 		if err != nil {
 			fmt.Printf("TCP accept error: %s\n", err)
 		}
-		logs.Logger.Infof("Incoming Connection %v", conn)
 		go t.handleConn(conn, false)
 	}
 }
@@ -123,13 +92,16 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	if err = t.HandshakeFunc(peer); err != nil {
 		return
 	}
-	// Function to be called on
+	// Function to be called on the peer.
+	// make sure any data structure inside the fucntion
+	// is race protected as multiple gorouitne will be acessing this.
 	if t.OnPeer != nil {
 		if err = t.OnPeer(peer); err != nil {
 			return
 		}
 	}
-	// Read loop
+	//The loop here will not run indefinitely.
+	//It will break and the function will exit when the connection stops sending data.
 	for {
 		rpc := RPC{}
 		err = t.Decoder.Decode(conn, &rpc)

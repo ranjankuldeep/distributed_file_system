@@ -37,5 +37,6 @@ func makeServer(listenAddr string, nodes ...string) *fileserver.FileServer {
 	}
 
 	s := fileserver.NewFileServer(fileServerOpts)
+	tcpTransport.OnPeer = s.OnPeer
 	return s
 }
