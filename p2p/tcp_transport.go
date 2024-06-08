@@ -125,7 +125,8 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		conn.Close()
 	}()
 
-	peer := NewTCPPeer(conn, outbound)
+	peer := NewTCPPeer(conn, outbound) // outbound represents that request for connecton is
+	// sent by the client.
 
 	if err = t.HandshakeFunc(peer); err != nil {
 		return

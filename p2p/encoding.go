@@ -11,6 +11,8 @@ type Decoder interface {
 
 type GOBDecoder struct{}
 
+// This implements the Decoder interface.
+// msg here should must be pointer type.
 func (dec GOBDecoder) Decode(r io.Reader, msg *RPC) error {
 	return gob.NewDecoder(r).Decode(msg)
 }
