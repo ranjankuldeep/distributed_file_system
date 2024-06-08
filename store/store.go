@@ -67,7 +67,7 @@ func (s *Store) writeStream(id string, key string, r io.Reader) (int64, error) {
 	return io.Copy(f, r)
 }
 
-func (s *Store) openFileForWriting(id string, key string) (*os.File, error) {
+func (s *Store) openFileForWriting(id string, key string) (*os.File, error) { // os.File implements io.writer interface.
 	pathKey := s.PathTransformFunc(key)
 	pathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.PathName)
 	if err := os.MkdirAll(pathNameWithRoot, os.ModePerm); err != nil {

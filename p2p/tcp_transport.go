@@ -3,6 +3,7 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -17,8 +18,7 @@ type TCPPeer struct {
 	// if we dial and retrieve a conn => outbound == true
 	// if we accept and retrieve a conn => outbound == false
 	outbound bool
-
-	wg *sync.WaitGroup
+	wg       *sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
@@ -33,6 +33,7 @@ func (p *TCPPeer) CloseStream() {
 	p.wg.Done()
 }
 
+// Send Message to the peer.
 func (p *TCPPeer) Send(b []byte) error {
 	_, err := p.Conn.Write(b)
 	return err
@@ -81,24 +82,18 @@ func (t *TCPTransport) Dial(addr string) error {
 	if err != nil {
 		return err
 	}
-
 	go t.handleConn(conn, true) // Since you dial and recive the connection, make this as true for the outbound rule.
-
 	return nil
 }
 
 func (t *TCPTransport) ListenAndAccept() error {
 	var err error
-
 	t.listener, err = net.Listen("tcp", t.ListenAddr)
 	if err != nil {
 		return err
 	}
-
 	go t.startAcceptLoop()
-
 	log.Printf("TCP transport listening on port: %s\n", t.ListenAddr)
-
 	return nil
 }
 
@@ -108,30 +103,25 @@ func (t *TCPTransport) startAcceptLoop() {
 		if errors.Is(err, net.ErrClosed) {
 			return
 		}
-
 		if err != nil {
 			fmt.Printf("TCP accept error: %s\n", err)
 		}
-
 		go t.handleConn(conn, false)
 	}
 }
 
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
-
 	defer func() {
 		fmt.Printf("dropping peer connection: %s", err)
 		conn.Close()
 	}()
 
-	peer := NewTCPPeer(conn, outbound) // outbound represents that request for connecton is
-	// sent by the client.
-
+	peer := NewTCPPeer(conn, outbound) // outbound represents that request for connecton is sent by the client.
 	if err = t.HandshakeFunc(peer); err != nil {
 		return
 	}
-
+	// Function to be called on
 	if t.OnPeer != nil {
 		if err = t.OnPeer(peer); err != nil {
 			return
@@ -144,17 +134,45 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		if err != nil {
 			return
 		}
-
 		rpc.From = conn.RemoteAddr().String()
 
 		if rpc.Stream {
 			peer.wg.Add(1)
 			fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
+
+			go func() {
+				defer peer.wg.Done() // For continuing the program in the main go routine.
+				err := handleStream(conn)
+				if err != nil {
+					fmt.Printf("Error handling stream: %v\n", err)
+					return
+				}
+				fmt.Printf("[%s] stream processing done\n", conn.RemoteAddr())
+			}()
+
 			peer.wg.Wait()
 			fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 			continue
 		}
 
-		t.rpcch <- rpc // you can consume from this channel only not write to this channel
+		t.rpcch <- rpc
+		// Write the data to the channel if it's not stream directly.
+		// you can consume from this channel only not write to this channel
 	}
+}
+
+func handleStream(conn net.Conn) error {
+	buffer := make([]byte, 1024)
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("error reading from stream: %w", err)
+		}
+		// Process the stream data
+		fmt.Printf("Stream data: %s\n", string(buffer[:n]))
+	}
+	return nil
 }
