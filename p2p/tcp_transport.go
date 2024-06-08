@@ -104,6 +104,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	//It will break and the function will exit when the connection stops sending data.
 	for {
 		rpc := RPC{}
+		// This will populate the rpc struct.
 		err = t.Decoder.Decode(conn, &rpc)
 		if err != nil {
 			return
@@ -129,6 +130,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			continue
 		}
 
+		// Finally send the rpc message to process further.
 		t.rpcch <- rpc
 		// Write the data to the channel if it's not stream directly.
 		// you can consume from this channel only not write to this channel

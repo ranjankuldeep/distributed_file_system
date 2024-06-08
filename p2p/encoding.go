@@ -20,11 +20,12 @@ func (dec GOBDecoder) Decode(r io.Reader, msg *RPC) error {
 type DefaultDecoder struct{}
 
 func (dec DefaultDecoder) Decode(r io.Reader, msg *RPC) error {
+	// Extract the first byte for checking whether its a normal message
+	// or a stream.
 	peekBuf := make([]byte, 1)
 	if _, err := r.Read(peekBuf); err != nil {
 		return nil
 	}
-
 	// In case of a stream we are not decoding what is being sent over the network.
 	// We are just setting Stream true so we can handle that in our logic.
 	stream := peekBuf[0] == IncomingStream

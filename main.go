@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/labstack/gommon/log"
@@ -17,8 +18,15 @@ func main() {
 	go func() {
 		log.Fatal(s1.Start())
 	}()
+
 	time.Sleep(500 * time.Millisecond)
-	s2.Start()
+	go s2.Start()
+	time.Sleep(500 * time.Millisecond)
+
+	data := bytes.NewReader([]byte("My Big Data File here."))
+	s2.Store("1234", "myfuckingkey", data)
+
+	select {}
 }
 
 func makeServer(listenAddr string, nodes ...string) *fileserver.FileServer {
