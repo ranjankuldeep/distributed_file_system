@@ -49,38 +49,43 @@ func (fs *FileServer) Start() error {
 	return nil
 }
 func (fs *FileServer) Store(id string, key string, r io.Reader) error {
+	buf := new(bytes.Buffer)
+	tee := io.TeeReader(r, buf)
 	// 1. SAVE THE FILE TO THIS DISK.
-	if _, err := fs.store.Write(id, key, r); err != nil {
+	if _, err := fs.store.Write(id, key, tee); err != nil {
 		return err
 	}
 	// 2. BROADCAST THE FILE TO ALL KNONW PEERS IN THE NETWORK.
-	buf := new(bytes.Buffer)
-	_, err := io.Copy(buf, r)
-	if err != nil {
-		return err
-	}
-	p := &Payload{
+	p := &DataMessage{
 		Key:  key,
 		Data: buf.Bytes(),
 	}
 
-	logs.Logger.Infof("Stored %v", buf.Bytes())
-	return fs.BroadCast(p)
+	logs.Logger.Infof("Stored %v", buf.String())
+	return fs.BroadCast(&Message{
+		From:    "todo",
+		Payload: p,
+	})
 }
 
-type Payload struct {
+type Message struct {
+	From    string
+	Payload any
+}
+
+type DataMessage struct {
 	Key  string
 	Data []byte
 }
 
-func (fs *FileServer) BroadCast(p *Payload) error {
+func (fs *FileServer) BroadCast(msg *Message) error {
 	peers := []io.Writer{}
 
 	for _, peer := range fs.peers {
 		peers = append(peers, peer)
 	}
 	mw := io.MultiWriter(peers...)
-	return gob.NewEncoder(mw).Encode(p)
+	return gob.NewEncoder(mw).Encode(msg)
 }
 
 func (fs *FileServer) Stop() error {
@@ -109,16 +114,26 @@ func (fs *FileServer) ReadLoop() {
 	for {
 		select {
 		case msg := <-fs.Transport.Consume():
-			logs.Logger.Info(msg)
-			var p Payload
-			if err := gob.NewDecoder(bytes.NewReader(msg.Payload)).Decode(&p); err != nil {
-				logs.Logger.Fatal(err)
+			logs.Logger.Info(msg.Payload)
+			var m Message
+			if err := gob.NewDecoder(bytes.NewReader(msg.Payload)).Decode(&m); err != nil {
+				logs.Logger.Error(err)
 			}
-			logs.Logger.Infof("%+v\n", p)
+			if err := fs.handleMessage(&m); err != nil {
+				logs.Logger.Error(err)
+			}
 		case <-fs.quitch:
 			return
 		}
 	}
+}
+
+func (fs *FileServer) handleMessage(msg *Message) error {
+	switch v := msg.Payload.(type) {
+	case *DataMessage:
+		logs.Logger.Infof("received data %+v\n", v)
+	}
+	return nil
 }
 
 // Non blocking

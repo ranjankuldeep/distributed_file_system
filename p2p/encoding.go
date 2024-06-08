@@ -40,6 +40,7 @@ func (dec DefaultDecoder) Decode(r io.Reader, msg *RPC) error {
 		return err
 	}
 
-	msg.Payload = buf[:n] // Converitng slice of byte to string and sending over as payload to rpc object
+	msg.Payload = buf[:n]
+	// Converitng slice of byte to string and sending over as payload to rpc object
 	return nil
 }
