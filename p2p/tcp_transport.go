@@ -111,20 +111,10 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		}
 		rpc.From = conn.RemoteAddr().String()
 
+		// Do not handle here, stream data could be very huge, resulting in full memory blockage.
 		if rpc.Stream {
 			peer.wg.Add(1)
 			fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
-
-			go func() {
-				defer peer.wg.Done() // For continuing the program in the main go routine.
-				err := handleStream(conn)
-				if err != nil {
-					fmt.Printf("Error handling stream: %v\n", err)
-					return
-				}
-				fmt.Printf("[%s] stream processing done\n", conn.RemoteAddr())
-			}()
-
 			peer.wg.Wait()
 			fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 			continue

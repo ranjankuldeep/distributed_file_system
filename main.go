@@ -24,7 +24,7 @@ func main() {
 	time.Sleep(1 * time.Second)
 
 	data := bytes.NewReader([]byte("My Big Data File here!"))
-	s2.Store("1234", "myfuckingkey", data)
+	s2.Store("myfuckingkey", data)
 
 	select {}
 }
