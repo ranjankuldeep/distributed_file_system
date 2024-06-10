@@ -88,7 +88,7 @@ func (fs *FileServer) Get(key string) (io.Reader, error) {
 	msg := Message{
 		Payload: MessageGetFile{
 			ID:  fs.ID,
-			Key: key,
+			Key: encrypt.HashKey(key),
 		},
 	}
 
@@ -131,7 +131,7 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 	msg := Message{
 		Payload: MessageStoreFile{
 			ID:  fs.ID,
-			Key: key,
+			Key: encrypt.HashKey(key), //Hashed key will be stored on network.
 			// Specify the data size. (important)
 			// Since we are first encrypting the data, it cost additional 16 byte of blockSize.
 			Size: size + 16,

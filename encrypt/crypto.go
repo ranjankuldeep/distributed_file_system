@@ -3,7 +3,9 @@ package encrypt
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
+	"encoding/hex"
 	"io"
 )
 
@@ -11,6 +13,11 @@ func NewEncryptionKey() []byte {
 	keyBuf := make([]byte, 32)
 	io.ReadFull(rand.Reader, keyBuf)
 	return keyBuf
+}
+
+func HashKey(key string) string {
+	hash := md5.Sum([]byte(key))
+	return hex.EncodeToString(hash[:])
 }
 
 func CopyEncrypt(key []byte, src io.Reader, dst io.Writer) (int, error) {
