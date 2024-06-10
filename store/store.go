@@ -55,6 +55,7 @@ func (s *Store) Delete(id string, key string) error {
 	return os.RemoveAll(firstPathNameWithRoot)
 }
 
+// Returns data size written and an error.
 func (s *Store) Write(id string, key string, r io.Reader) (int64, error) {
 	return s.writeStream(id, key, r)
 }
@@ -79,6 +80,7 @@ func (s *Store) openFileForWriting(id string, key string) (*os.File, error) { //
 	return os.Create(fullPathWithRoot)
 }
 
+// Returns file Size, Reader and an error.
 func (s *Store) Read(id string, key string) (int64, io.Reader, error) {
 	return s.readStream(id, key)
 }

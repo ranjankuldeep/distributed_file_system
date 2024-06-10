@@ -3,7 +3,6 @@ package p2p
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 
 	"github.com/ranjankuldeep/distributed_file_system/logs"
@@ -81,6 +80,7 @@ func (t *TCPTransport) startAcceptLoop() {
 	}
 }
 
+// Spinned up for every request.
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 	defer func() {
@@ -100,8 +100,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			return
 		}
 	}
-	//The loop here will not run indefinitely.
-	//It will break and the function will exit when the connection stops sending data.
+	//This read loop here will run indefinitely.
 	for {
 		rpc := RPC{}
 		// This will populate the rpc struct.
@@ -114,31 +113,27 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		// Do not handle here, stream data could be very huge, resulting in full memory blockage.
 		if rpc.Stream {
 			peer.wg.Add(1)
-			fmt.Printf("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
+			logs.Logger.Infof("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
 			peer.wg.Wait()
-			fmt.Printf("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
+			logs.Logger.Infof("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 			continue
 		}
-
-		// Finally send the rpc message to process further.
 		t.rpcch <- rpc
-		// Write the data to the channel if it's not stream directly.
-		// you can consume from this channel only not write to this channel
 	}
 }
 
-func handleStream(conn net.Conn) error {
-	buffer := make([]byte, 1024)
-	for {
-		n, err := conn.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("error reading from stream: %w", err)
-		}
-		// Process the stream data
-		fmt.Printf("Stream data: %s\n", string(buffer[:n]))
-	}
-	return nil
-}
+// func handleStream(conn net.Conn) error {
+// 	buffer := make([]byte, 1024)
+// 	for {
+// 		n, err := conn.Read(buffer)
+// 		if err != nil {
+// 			if err == io.EOF {
+// 				break
+// 			}
+// 			return fmt.Errorf("error reading from stream: %w", err)
+// 		}
+// 		// Process the stream data
+// 		fmt.Printf("Stream data: %s\n", string(buffer[:n]))
+// 	}
+// 	return nil
+// }

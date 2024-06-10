@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bytes"
+	"io/ioutil"
 	"time"
 
 	"github.com/labstack/gommon/log"
 	"github.com/ranjankuldeep/distributed_file_system/fileserver"
+	"github.com/ranjankuldeep/distributed_file_system/logs"
 	"github.com/ranjankuldeep/distributed_file_system/p2p"
 	"github.com/ranjankuldeep/distributed_file_system/store"
 )
@@ -23,9 +24,19 @@ func main() {
 	go s2.Start()
 	time.Sleep(1 * time.Second)
 
-	data := bytes.NewReader([]byte("My Big Data File here!"))
-	s2.Store("myfuckingkey", data)
+	// data := bytes.NewReader([]byte("My Big Data File here!"))
+	// s2.Store("myfuckingkey", data)
 
+	r, err := s2.Get("myfuckingkey")
+	if err != nil {
+		logs.Logger.Fatalf(err.Error())
+	}
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logs.Logger.Info(string(b))
 	select {}
 }
 
