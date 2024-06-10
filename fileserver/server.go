@@ -130,7 +130,7 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 		Payload: MessageStoreFile{
 			ID:   fs.ID,
 			Key:  key,
-			Size: size,
+			Size: size, // Specify the data size. (important)
 		},
 	}
 	// 2. BROADCAST THE FILE TO ALL KNONW PEERS IN THE NETWORK.
