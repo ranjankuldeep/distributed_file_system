@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"time"
 
 	"github.com/labstack/gommon/log"
+	"github.com/ranjankuldeep/distributed_file_system/encrypt"
 	"github.com/ranjankuldeep/distributed_file_system/fileserver"
 	"github.com/ranjankuldeep/distributed_file_system/logs"
 	"github.com/ranjankuldeep/distributed_file_system/p2p"
@@ -24,10 +26,16 @@ func main() {
 	go s2.Start()
 	time.Sleep(1 * time.Second)
 
-	// data := bytes.NewReader([]byte("My Big Data File here!"))
-	// s2.Store("myfuckingkey", data)
+	key := "myfuckingkey"
+	data := bytes.NewReader([]byte("My Big Data File here!"))
+	s2.Store(key, data)
 
-	r, err := s2.Get("myfuckingkey")
+	// DELETE THE DATA LOCALLY
+	if err := s2.FsStore.Delete("1234", key); err != nil {
+		logs.Logger.Errorf("Unable to delete key localy %s", err)
+		return
+	}
+	r, err := s2.Get(key)
 	if err != nil {
 		logs.Logger.Fatalf(err.Error())
 	}
@@ -49,6 +57,7 @@ func makeServer(listenAddr string, nodes ...string) *fileserver.FileServer {
 	tcpTransport := p2p.NewTCPTransport(tcptransportOpts)
 
 	fileServerOpts := fileserver.FileServerOpts{
+		EncKey:            encrypt.NewEncryptionKey(),
 		StorageRoot:       listenAddr + "_network",
 		PathTransformFunc: store.CASPathTransformFunc,
 		Transport:         tcpTransport,

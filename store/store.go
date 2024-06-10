@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
+
+	"github.com/ranjankuldeep/distributed_file_system/encrypt"
 )
 
 const defaultRootFolderName = "ggnetwork"
@@ -55,9 +57,18 @@ func (s *Store) Delete(id string, key string) error {
 	return os.RemoveAll(firstPathNameWithRoot)
 }
 
-// Returns data size written and an error.
+// Returns data size written locally and an error.
 func (s *Store) Write(id string, key string, r io.Reader) (int64, error) {
 	return s.writeStream(id, key, r)
+}
+
+func (s *Store) WriteDecrypt(encKey []byte, id string, key string, r io.Reader) (int64, error) {
+	f, err := s.openFileForWriting(id, key)
+	if err != nil {
+		return 0, err
+	}
+	n, err := encrypt.CopyDecrypt(encKey, r, f)
+	return int64(n), err
 }
 
 func (s *Store) writeStream(id string, key string, r io.Reader) (int64, error) {

@@ -9,12 +9,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ranjankuldeep/distributed_file_system/encrypt"
 	"github.com/ranjankuldeep/distributed_file_system/logs"
 	"github.com/ranjankuldeep/distributed_file_system/p2p"
 	"github.com/ranjankuldeep/distributed_file_system/store"
 )
 
 type FileServerOpts struct {
+	EncKey            []byte
 	ID                string
 	StorageRoot       string
 	PathTransformFunc store.PathTransformFunc
@@ -23,11 +25,11 @@ type FileServerOpts struct {
 }
 type FileServer struct {
 	FileServerOpts
-	store  *store.Store
-	quitch chan struct{}
+	FsStore *store.Store
+	Quitch  chan struct{}
 
-	peerLock sync.Mutex
-	peers    map[string]p2p.Peer
+	PeerLock sync.Mutex
+	Peers    map[string]p2p.Peer
 }
 
 // Message that is wired over.
@@ -57,10 +59,10 @@ func NewFileServer(opts FileServerOpts) *FileServer {
 	}
 	return &FileServer{
 		FileServerOpts: opts,
-		store:          store.NewStore(storeOpts),
-		quitch:         make(chan struct{}),
-		peers:          make(map[string]p2p.Peer),
-		peerLock:       sync.Mutex{},
+		FsStore:        store.NewStore(storeOpts),
+		Quitch:         make(chan struct{}),
+		Peers:          make(map[string]p2p.Peer),
+		PeerLock:       sync.Mutex{},
 	}
 }
 
@@ -75,9 +77,9 @@ func (fs *FileServer) Start() error {
 }
 
 func (fs *FileServer) Get(key string) (io.Reader, error) {
-	if fs.store.Has(fs.ID, key) {
+	if fs.FsStore.Has(fs.ID, key) {
 		logs.Logger.Infof("[%s] serving file (%s) from local disk\n", fs.Transport.Addr(), key)
-		_, r, err := fs.store.Read(fs.ID, key)
+		_, r, err := fs.FsStore.Read(fs.ID, key)
 		return r, err
 	}
 
@@ -96,20 +98,20 @@ func (fs *FileServer) Get(key string) (io.Reader, error) {
 	time.Sleep(time.Millisecond * 500)
 
 	// Any peer over the network will start streaming the data.
-	for _, peer := range fs.peers {
+	for _, peer := range fs.Peers {
 		// First read the file size so we can limit the amount of bytes that we read
 		// from the connection, so it will not keep hanging.
 		var fileSize int64
 		binary.Read(peer, binary.LittleEndian, &fileSize)
-		_, err := fs.store.Write(fs.ID, key, io.LimitReader(peer, fileSize))
+		_, err := fs.FsStore.WriteDecrypt(fs.EncKey, fs.ID, key, io.LimitReader(peer, fileSize))
 		if err != nil {
-			logs.Logger.Errorf("Unable to Write the Data Fetched Over the Network.")
+			logs.Logger.Errorf("Unable to Write the Data Fetched by over the Network.")
 		}
 		logs.Logger.Infof("[%s] received (%d) bytes over the network from (%s)", fs.Transport.Addr(), fileSize, peer.RemoteAddr())
 		peer.CloseStream()
 	}
 
-	_, r, err := fs.store.Read(fs.ID, key)
+	_, r, err := fs.FsStore.Read(fs.ID, key)
 	if err != nil {
 		logs.Logger.Errorf("Cannot read from the store %s", key)
 	}
@@ -121,19 +123,21 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 		fileBuffer = new(bytes.Buffer)
 		tee        = io.TeeReader(r, fileBuffer)
 	)
-	// 1. SAVE THE FILE TO THIS DISK and get the size of the file (important for EOF on the network)
-	size, err := fs.store.Write(fs.ID, key, tee)
+	// 1. SAVE THE FILE TO THIS DISK and get the size of the file written locally (important for EOF on the network)
+	size, err := fs.FsStore.Write(fs.ID, key, tee)
 	if err != nil {
 		return err
 	}
 	msg := Message{
 		Payload: MessageStoreFile{
-			ID:   fs.ID,
-			Key:  key,
-			Size: size, // Specify the data size. (important)
+			ID:  fs.ID,
+			Key: key,
+			// Specify the data size. (important)
+			// Since we are first encrypting the data, it cost additional 16 byte of blockSize.
+			Size: size + 16,
 		},
 	}
-	// 2. BROADCAST THE FILE TO ALL KNONW PEERS IN THE NETWORK.
+	// 2. BROADCAST THE FILE TO ALL KNOWN PEERS IN THE NETWORK.
 	// Broadcast the key over the network
 	if err := fs.BroadCast(&msg); err != nil {
 		return err
@@ -142,26 +146,28 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 	time.Sleep(time.Millisecond * 1000)
 
 	peers := []io.Writer{}
-	for _, peer := range fs.peers {
+	for _, peer := range fs.Peers {
 		peers = append(peers, peer)
 	}
 	mw := io.MultiWriter(peers...)
 	mw.Write([]byte{p2p.IncomingStream})
-	if _, err := io.Copy(mw, fileBuffer); err != nil {
-		logs.Logger.Errorf("Failed to stream data.")
+	// Send the encrypted message over the network.
+	if _, err := encrypt.CopyEncrypt(fs.EncKey, fileBuffer, mw); err != nil {
+		logs.Logger.Errorf("Failed to stream data %v", err)
 		return err
 	}
+
 	logs.Logger.Infof("[%s] received and written (%d) bytes to disk\n", fs.Transport.Addr(), size)
 	return nil
 }
 
-// Only Broadcasting the message.
+// Broadcasting the message.
 func (fs *FileServer) BroadCast(msg *Message) error {
 	buf := new(bytes.Buffer)
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
 		return err
 	}
-	for _, peer := range fs.peers {
+	for _, peer := range fs.Peers {
 		if err := peer.Send([]byte{p2p.IncomingMessage}); err != nil { // First send the incoming message after encoding.
 			logs.Logger.Error(err)
 			return err
@@ -176,7 +182,7 @@ func (fs *FileServer) BroadCast(msg *Message) error {
 }
 
 func (fs *FileServer) Stop() error {
-	fs.quitch <- struct{}{}
+	fs.Quitch <- struct{}{}
 	return nil
 }
 
@@ -184,10 +190,10 @@ func (fs *FileServer) Stop() error {
 // peers map at a time
 // map read is optimized for concurrent read but not map write.
 func (s *FileServer) OnPeer(p p2p.Peer) error {
-	s.peerLock.Lock()
-	defer s.peerLock.Unlock()
+	s.PeerLock.Lock()
+	defer s.PeerLock.Unlock()
 
-	s.peers[p.RemoteAddr().String()] = p
+	s.Peers[p.RemoteAddr().String()] = p
 	logs.Logger.Infof("connected with remote %s", p.RemoteAddr().String())
 	return nil
 }
@@ -211,7 +217,7 @@ func (fs *FileServer) ReadLoop() {
 				logs.Logger.Error(err)
 
 			}
-		case <-fs.quitch:
+		case <-fs.Quitch:
 			logs.Logger.Info("User Quit Action")
 			return
 		}
@@ -230,14 +236,15 @@ func (fs *FileServer) handleMessage(from string, msg *Message) error {
 }
 
 func (fs *FileServer) handleMessageStoreFile(from string, msg *MessageStoreFile) error {
-	peer, ok := fs.peers[from]
+	peer, ok := fs.Peers[from]
 	if !ok {
 		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
 	}
+	// TODO: Add decryptor
 	// A limit reader is necassary as over the network
 	// when reading from the connection directly it will not send the EOF.
 	// Which results in keep waiting until EOF.
-	n, err := fs.store.Write(msg.ID, msg.Key, io.LimitReader(peer, msg.Size))
+	n, err := fs.FsStore.Write(msg.ID, msg.Key, io.LimitReader(peer, msg.Size))
 	if err != nil {
 		return err
 	}
@@ -248,13 +255,11 @@ func (fs *FileServer) handleMessageStoreFile(from string, msg *MessageStoreFile)
 }
 
 func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error {
-	if !s.store.Has(msg.ID, msg.Key) {
+	if !s.FsStore.Has(msg.ID, msg.Key) {
 		return fmt.Errorf("[%s] need to serve file (%s) but it does not exist on disk", s.Transport.Addr(), msg.Key)
 	}
-
 	fmt.Printf("[%s] serving file (%s) over the network\n", s.Transport.Addr(), msg.Key)
-
-	fileSize, r, err := s.store.Read(msg.ID, msg.Key)
+	fileSize, r, err := s.FsStore.Read(msg.ID, msg.Key)
 	if err != nil {
 		return err
 	}
@@ -264,22 +269,21 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 		defer rc.Close()
 	}
 
-	peer, ok := s.peers[from]
+	peer, ok := s.Peers[from]
 	if !ok {
 		return fmt.Errorf("peer %s not in map", from)
 	}
 
-	// First send the "incomingStream" byte to the peer and then we can send
-	// the file size as an int64.
+	// 1. Send the "incomingStream" byte to the peer and then
+	// 2. Send the file size as an int64.
+	// 3. Stream the data over the network.
 	peer.Send([]byte{p2p.IncomingStream})
 	binary.Write(peer, binary.LittleEndian, fileSize)
 	n, err := io.Copy(peer, r)
 	if err != nil {
 		return err
 	}
-
 	fmt.Printf("[%s] written (%d) bytes over the network to %s\n", s.Transport.Addr(), n, from)
-
 	return nil
 }
 
