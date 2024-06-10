@@ -9,6 +9,12 @@ import (
 	"io"
 )
 
+func GenerateID() string {
+	buf := make([]byte, 32)
+	io.ReadFull(rand.Reader, buf)
+	return hex.EncodeToString(buf)
+}
+
 func NewEncryptionKey() []byte {
 	keyBuf := make([]byte, 32)
 	io.ReadFull(rand.Reader, keyBuf)

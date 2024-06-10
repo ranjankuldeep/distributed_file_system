@@ -31,6 +31,7 @@ func NewStore(opts StoreOpts) *Store {
 }
 
 type StoreOpts struct {
+	// Root is the folder name of the root, containing all folders/files of the system.
 	Root              string
 	PathTransformFunc PathTransformFunc
 }

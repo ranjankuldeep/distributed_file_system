@@ -16,7 +16,9 @@ import (
 )
 
 type FileServerOpts struct {
-	EncKey            []byte
+	EncKey []byte
+	// ID of the owner of the storage, which will be used to store all the files and folders at the location
+	// so we can sync all the files if needed.
 	ID                string
 	StorageRoot       string
 	PathTransformFunc store.PathTransformFunc
@@ -55,7 +57,7 @@ func NewFileServer(opts FileServerOpts) *FileServer {
 		PathTransformFunc: opts.PathTransformFunc,
 	}
 	if len(opts.ID) == 0 {
-		opts.ID = "1234"
+		opts.ID = encrypt.GenerateID()
 	}
 	return &FileServer{
 		FileServerOpts: opts,
