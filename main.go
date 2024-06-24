@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,20 +38,22 @@ func main() {
 	s2.Store(key, data)
 
 	// DELETE THE DATA LOCALLY directly from the store
-	if err := s2.FsStore.Delete(user1Id.String(), key); err != nil {
-		logs.Logger.Errorf("Unable to delete key localy %s", err)
-		return
+	// if err := s2.FsStore.Delete(user1Id.String(), key); err != nil {
+	// 	logs.Logger.Errorf("deleted")
+	// }
+	if err := s2.Delete(key); err != nil {
+		logs.Logger.Errorf("Error deleting")
 	}
-	time.Sleep(1 * time.Millisecond)
-	r, err := s2.Get(key) // s2 will now fetch now from the network
-	if err != nil {
-		logs.Logger.Fatalf(err.Error())
-	}
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		log.Fatal(err)
-	}
-	logs.Logger.Info(string(b))
+	// time.Sleep(1 * time.Millisecond)
+	// r, err := s2.Get(key) // s2 will now fetch now from the network
+	// if err != nil {
+	// 	logs.Logger.Fatalf(err.Error())
+	// }
+	// b, err := ioutil.ReadAll(r)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// logs.Logger.Info(string(b))
 	select {}
 }
 

@@ -51,6 +51,11 @@ type MessageGetFile struct {
 	Key string
 }
 
+type MessageDeleteFile struct {
+	ID  string
+	Key string
+}
+
 func NewFileServer(opts FileServerOpts) *FileServer {
 	storeOpts := store.StoreOpts{
 		Root:              opts.StorageRoot,
@@ -89,7 +94,7 @@ func (fs *FileServer) Get(key string) (io.Reader, error) {
 	msg := Message{
 		Payload: MessageGetFile{
 			ID:  fs.ID,
-			Key: encrypt.HashKey(key),
+			Key: key,
 		},
 	}
 
@@ -136,9 +141,10 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 		// Payload if of message store file hinting remote server to store the data.
 		Payload: MessageStoreFile{
 			ID:  fs.ID,
-			Key: encrypt.HashKey(key),
+			Key: key,
 			// Hashed key will be stored on network as we don't want the other server to guess about the file by its name.
 			// Specify the data size. (important)
+
 			// Since we are first encrypting the data, it cost additional 16 byte of blockSize.
 			Size: size + 16,
 		},
@@ -168,6 +174,20 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 // Todo: IMplement it.
 // 1. Delete it Locally and through out the network.
 func (fs *FileServer) Delete(key string) error {
+	if err := fs.FsStore.Delete(fs.ID, key); err != nil {
+		logs.Logger.Errorf("Error Deleting Key Locally %s", key)
+	}
+	msg := Message{
+		Payload: MessageDeleteFile{
+			ID:  fs.ID,
+			Key: key,
+		},
+	}
+	logs.Logger.Infof("BroadCasting the Delete Request over the network %s", key)
+	if err := fs.BroadCast(&msg); err != nil {
+		logs.Logger.Errorf("Error Broadcasting the Delete Request: %+v", err)
+		return err
+	}
 	logs.Logger.Info("Deleting Data from Network")
 	return nil
 }
@@ -183,7 +203,7 @@ func (fs *FileServer) BroadCast(msg *Message) error {
 			logs.Logger.Error(err)
 			return err
 		}
-		// Then send the key encoded.
+		// Then send the message to the peer.
 		if err := peer.Send(buf.Bytes()); err != nil {
 			logs.Logger.Error(err)
 			return err
@@ -240,11 +260,14 @@ func (fs *FileServer) handleMessage(from string, msg *Message) error {
 		return fs.handleMessageStoreFile(from, &v)
 	case MessageGetFile:
 		return fs.handleMessageGetFile(from, v)
+	case MessageDeleteFile:
+		return fs.handleMessageDeleteFile(from, v)
 	}
 	return nil
 }
 
 func (fs *FileServer) handleMessageStoreFile(from string, msg *MessageStoreFile) error {
+	// Secuirty check.
 	peer, ok := fs.Peers[from]
 	if !ok {
 		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
@@ -266,6 +289,10 @@ func (fs *FileServer) handleMessageStoreFile(from string, msg *MessageStoreFile)
 }
 
 func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error {
+	peer, ok := s.Peers[from]
+	if !ok {
+		return fmt.Errorf("peer %s not in map", from)
+	}
 	if !s.FsStore.Has(msg.ID, msg.Key) {
 		return fmt.Errorf("[%s] need to serve file (%s) but it does not exist on disk", s.Transport.Addr(), msg.Key)
 	}
@@ -274,15 +301,9 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 	if err != nil {
 		return err
 	}
-
 	if rc, ok := r.(io.ReadCloser); ok {
 		fmt.Println("closing readCloser")
 		defer rc.Close()
-	}
-
-	peer, ok := s.Peers[from]
-	if !ok {
-		return fmt.Errorf("peer %s not in map", from)
 	}
 
 	// 1. Send the "incomingStream" byte to the peer and then
@@ -296,6 +317,16 @@ func (s *FileServer) handleMessageGetFile(from string, msg MessageGetFile) error
 	}
 	fmt.Printf("[%s] written (%d) bytes over the network to %s\n", s.Transport.Addr(), n, from)
 	return nil
+}
+
+func (fs *FileServer) handleMessageDeleteFile(from string, msg MessageDeleteFile) error {
+	logs.Logger.Infof("Recived Delete Request from %+v", from)
+	// Security Check
+	_, ok := fs.Peers[from]
+	if !ok {
+		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
+	}
+	return fs.FsStore.Delete(msg.ID, msg.Key)
 }
 
 // Non blocking
@@ -317,4 +348,5 @@ func (fs *FileServer) bootStrapNetwork() error {
 func init() {
 	gob.Register(MessageStoreFile{})
 	gob.Register(MessageGetFile{})
+	gob.Register(MessageDeleteFile{})
 }

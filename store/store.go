@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/ranjankuldeep/distributed_file_system/encrypt"
+	"github.com/ranjankuldeep/distributed_file_system/logs"
 )
 
 const defaultRootFolderName = "ggnetwork"
@@ -44,7 +45,6 @@ func (s *Store) Clear() error {
 func (s *Store) Has(id string, key string) bool {
 	pathKey := s.PathTransformFunc(key)
 	fullPathWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FullPath())
-
 	_, err := os.Stat(fullPathWithRoot)
 	return !errors.Is(err, os.ErrNotExist)
 }
@@ -56,7 +56,9 @@ func (s *Store) Delete(id string, key string) error {
 	}()
 	firstPathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FirstPathName())
 	if err := os.RemoveAll(firstPathNameWithRoot); err != nil {
+		logs.Logger.Errorf("Error removing file")
 		if pathError, ok := err.(*os.PathError); ok {
+			logs.Logger.Errorf("Error removing file")
 			return pathError
 		}
 	}
@@ -78,6 +80,7 @@ func (s *Store) WriteDecrypt(encKey []byte, id string, key string, r io.Reader) 
 }
 
 func (s *Store) writeStream(id string, key string, r io.Reader) (int64, error) {
+	logs.Logger.Info(key)
 	f, err := s.openFileForWriting(id, key)
 	if err != nil {
 		return 0, err
