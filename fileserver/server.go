@@ -86,7 +86,6 @@ func (fs *FileServer) Get(key string) (io.Reader, error) {
 	}
 
 	logs.Logger.Infof("[%s] dont have file (%s) locally, fetching from network...\n", fs.Transport.Addr(), key)
-
 	msg := Message{
 		Payload: MessageGetFile{
 			ID:  fs.ID,
@@ -130,17 +129,22 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	logs.Logger.Infof("[%s] Stored (%d) bytes to disk\n", fs.Transport.Addr(), size)
+	logs.Logger.Info("Broadcasting to other Peers")
+
 	msg := Message{
+		// Payload if of message store file hinting remote server to store the data.
 		Payload: MessageStoreFile{
 			ID:  fs.ID,
-			Key: encrypt.HashKey(key), //Hashed key will be stored on network.
+			Key: encrypt.HashKey(key),
+			// Hashed key will be stored on network as we don't want the other server to guess about the file by its name.
 			// Specify the data size. (important)
 			// Since we are first encrypting the data, it cost additional 16 byte of blockSize.
 			Size: size + 16,
 		},
 	}
 	// 2. BROADCAST THE FILE TO ALL KNOWN PEERS IN THE NETWORK.
-	// Broadcast the key over the network
+	// 3. Broadcast the Key over the network
 	if err := fs.BroadCast(&msg); err != nil {
 		return err
 	}
@@ -153,13 +157,18 @@ func (fs *FileServer) Store(key string, r io.Reader) error {
 	}
 	mw := io.MultiWriter(peers...)
 	mw.Write([]byte{p2p.IncomingStream})
-	// Send the encrypted message over the network.
+	// Send the encrypted message data over the network.
 	if _, err := encrypt.CopyEncrypt(fs.EncKey, fileBuffer, mw); err != nil {
 		logs.Logger.Errorf("Failed to stream data %v", err)
 		return err
 	}
+	return nil
+}
 
-	logs.Logger.Infof("[%s] received and written (%d) bytes to disk\n", fs.Transport.Addr(), size)
+// Todo: IMplement it.
+// 1. Delete it Locally and through out the network.
+func (fs *FileServer) Delete(key string) error {
+	logs.Logger.Info("Deleting Data from Network")
 	return nil
 }
 
@@ -174,12 +183,12 @@ func (fs *FileServer) BroadCast(msg *Message) error {
 			logs.Logger.Error(err)
 			return err
 		}
+		// Then send the key encoded.
 		if err := peer.Send(buf.Bytes()); err != nil {
 			logs.Logger.Error(err)
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -213,11 +222,9 @@ func (fs *FileServer) ReadLoop() {
 			var m Message // This is what recived over the wire.
 			if err := gob.NewDecoder(bytes.NewReader(rpc.Payload)).Decode(&m); err != nil {
 				logs.Logger.Errorf("Decoding Error %+v", err)
-
 			}
 			if err := fs.handleMessage(rpc.From, &m); err != nil {
 				logs.Logger.Error(err)
-
 			}
 		case <-fs.Quitch:
 			logs.Logger.Info("User Quit Action")
@@ -229,7 +236,7 @@ func (fs *FileServer) ReadLoop() {
 func (fs *FileServer) handleMessage(from string, msg *Message) error {
 	switch v := msg.Payload.(type) {
 	case MessageStoreFile:
-		logs.Logger.Infof("Received key for Storing %+v\n", v)
+		logs.Logger.Infof("Received key for Storing %+v\n from %s", v, from)
 		return fs.handleMessageStoreFile(from, &v)
 	case MessageGetFile:
 		return fs.handleMessageGetFile(from, v)
@@ -243,11 +250,13 @@ func (fs *FileServer) handleMessageStoreFile(from string, msg *MessageStoreFile)
 		return fmt.Errorf("peer (%s) could not be found in the peer list", from)
 	}
 	// TODO: Add decryptor
+
 	// A limit reader is necassary as over the network
 	// when reading from the connection directly it will not send the EOF.
 	// Which results in keep waiting until EOF.
 	n, err := fs.FsStore.Write(msg.ID, msg.Key, io.LimitReader(peer, msg.Size))
 	if err != nil {
+		logs.Logger.Errorf(err.Error())
 		return err
 	}
 

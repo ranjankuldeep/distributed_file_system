@@ -80,7 +80,7 @@ func (t *TCPTransport) startAcceptLoop() {
 	}
 }
 
-// Spinned up for every request.
+// Spinned up for every request in seperate go routine.
 func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	var err error
 	defer func() {
@@ -100,7 +100,8 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			return
 		}
 	}
-	//This read loop here will run indefinitely.
+	// This read loop here will run indefinitely.
+	// Wating for the message from the connection.
 	for {
 		rpc := RPC{}
 		// This will populate the rpc struct.
@@ -114,7 +115,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		if rpc.Stream {
 			peer.wg.Add(1)
 			logs.Logger.Infof("[%s] incoming stream, waiting...\n", conn.RemoteAddr())
-			peer.wg.Wait()
+			peer.wg.Wait() // Blocks the read loop, means no other message will be hadled here until the stream is read.
 			logs.Logger.Infof("[%s] stream closed, resuming read loop\n", conn.RemoteAddr())
 			continue
 		}

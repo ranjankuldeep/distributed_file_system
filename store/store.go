@@ -55,7 +55,12 @@ func (s *Store) Delete(id string, key string) error {
 		log.Printf("deleted [%s] from disk", pathKey.Filename)
 	}()
 	firstPathNameWithRoot := fmt.Sprintf("%s/%s/%s", s.Root, id, pathKey.FirstPathName())
-	return os.RemoveAll(firstPathNameWithRoot)
+	if err := os.RemoveAll(firstPathNameWithRoot); err != nil {
+		if pathError, ok := err.(*os.PathError); ok {
+			return pathError
+		}
+	}
+	return nil
 }
 
 // Returns data size written locally and an error.
