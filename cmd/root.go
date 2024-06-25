@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ranjankuldeep/distributed_file_system/logs"
 	"github.com/spf13/cobra"
@@ -29,4 +31,14 @@ func init() {
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(storeCmd)
 	rootCmd.AddCommand(stopCmd)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		for sig := range c {
+			if sig == syscall.SIGTERM {
+				close(stopServer)
+			}
+		}
+	}()
 }

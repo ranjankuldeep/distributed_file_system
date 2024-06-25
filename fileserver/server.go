@@ -84,6 +84,7 @@ func (fs *FileServer) StartServer() error {
 }
 
 func (fs *FileServer) StopServer() error {
+	close(fs.Quitch)
 	if err := fs.Transport.Close(); err != nil {
 		logs.Logger.Error("Failed to stop the Server")
 		return err

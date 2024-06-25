@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -35,16 +37,25 @@ var (
 			serverMu.Lock()
 			defer serverMu.Unlock()
 
-			// name, _ := cmd.Flags().GetString("name")
-			// port, _ := cmd.Flags().GetString("port")
-
 			server = makeServer(UserName, ListenPort, args...)
 			go server.StartServer()
 			close(serverReady) // Signal that the server is ready
+
+			pid := os.Getpid()
+			pidFile := "/tmp/dfs_server.pid"
+			err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
+			if err != nil {
+				logs.Logger.Fatalf("Failed to write PID file: %v", err)
+			}
+
 			logs.Logger.Infof("Server started successfully, Username:%s, ListenPort:%s", UserName, ListenPort)
 
 			<-stopServer
 			logs.Logger.Info("Stopping server...")
+			if err := server.StopServer(); err != nil {
+				logs.Logger.Errorf("Unable to Stop the Server %+v", err)
+				panic(err)
+			}
 			return nil
 		},
 	}
