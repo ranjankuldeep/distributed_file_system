@@ -7,7 +7,13 @@ import (
 	"github.com/ranjankuldeep/distributed_file_system/fileserver"
 	"github.com/ranjankuldeep/distributed_file_system/p2p"
 	"github.com/ranjankuldeep/distributed_file_system/store"
+	"github.com/spf13/viper"
 )
+
+func init() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+}
 
 func main() {
 	cmd.Execute()
