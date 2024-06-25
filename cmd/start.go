@@ -12,6 +12,7 @@ import (
 	"github.com/ranjankuldeep/distributed_file_system/p2p"
 	"github.com/ranjankuldeep/distributed_file_system/store"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // start cmd needs two flag
@@ -38,7 +39,10 @@ var (
 			defer serverMu.Unlock()
 
 			server = makeServer(UserName, ListenPort, args...)
+
 			go server.StartServer()
+			viper.Set("server", server) // Store the server instance in config file
+			viper.WriteConfigAs("config")
 			close(serverReady) // Signal that the server is ready
 
 			pid := os.Getpid()

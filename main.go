@@ -1,18 +1,27 @@
 package main
 
 import (
-	"github.com/google/uuid"
+	"log"
+
 	"github.com/ranjankuldeep/distributed_file_system/cmd"
-	"github.com/ranjankuldeep/distributed_file_system/encrypt"
-	"github.com/ranjankuldeep/distributed_file_system/fileserver"
-	"github.com/ranjankuldeep/distributed_file_system/p2p"
-	"github.com/ranjankuldeep/distributed_file_system/store"
+	"github.com/ranjankuldeep/distributed_file_system/logs"
 	"github.com/spf13/viper"
 )
 
 func init() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
+	viper.WriteConfigAs(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			logs.Logger.Info("No Config File Found")
+			logs.Logger.Info("Initializing Config files")
+		} else {
+			logs.Logger.Errorf("Error Occured Reading Config File %+v", err)
+			log.Fatal(err)
+		}
+	}
 }
 
 func main() {
@@ -73,24 +82,24 @@ func main() {
 	// select {}
 }
 
-func makeServer(userId uuid.UUID, listenAddr string, nodes ...string) *fileserver.FileServer {
-	tcptransportOpts := p2p.TCPTransportOpts{
-		ListenAddr:    listenAddr,
-		HandshakeFunc: p2p.NOPHandshakeFunc,
-		Decoder:       p2p.DefaultDecoder{},
-	}
-	tcpTransport := p2p.NewTCPTransport(tcptransportOpts)
+// func makeServer(userId uuid.UUID, listenAddr string, nodes ...string) *fileserver.FileServer {
+// 	tcptransportOpts := p2p.TCPTransportOpts{
+// 		ListenAddr:    listenAddr,
+// 		HandshakeFunc: p2p.NOPHandshakeFunc,
+// 		Decoder:       p2p.DefaultDecoder{},
+// 	}
+// 	tcpTransport := p2p.NewTCPTransport(tcptransportOpts)
 
-	fileServerOpts := fileserver.FileServerOpts{
-		ID:                userId.String(),
-		EncKey:            encrypt.NewEncryptionKey(),
-		StorageRoot:       listenAddr + "_network",
-		PathTransformFunc: store.CASPathTransformFunc,
-		Transport:         tcpTransport,
-		BootStrapNodes:    nodes,
-	}
+// 	fileServerOpts := fileserver.FileServerOpts{
+// 		ID:                userId.String(),
+// 		EncKey:            encrypt.NewEncryptionKey(),
+// 		StorageRoot:       listenAddr + "_network",
+// 		PathTransformFunc: store.CASPathTransformFunc,
+// 		Transport:         tcpTransport,
+// 		BootStrapNodes:    nodes,
+// 	}
 
-	s := fileserver.NewFileServer(fileServerOpts)
-	tcpTransport.OnPeer = s.OnPeer
-	return s
-}
+// 	s := fileserver.NewFileServer(fileServerOpts)
+// 	tcpTransport.OnPeer = s.OnPeer
+// 	return s
+// }
