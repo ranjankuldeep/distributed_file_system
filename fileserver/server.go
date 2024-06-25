@@ -251,7 +251,7 @@ func (fs *FileServer) ReadLoop() {
 		case rpc := <-fs.Transport.Consume():
 			var m Message // This is what recived over the wire.
 			if err := gob.NewDecoder(bytes.NewReader(rpc.Payload)).Decode(&m); err != nil {
-				logs.Logger.Errorf("Decoding Error %+v", err)
+				logs.Logger.Errorf("Decoding Error %+v", err.Error())
 			}
 			if err := fs.handleMessage(rpc.From, &m); err != nil {
 				logs.Logger.Error(err)

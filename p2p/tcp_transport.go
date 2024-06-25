@@ -114,6 +114,7 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			}
 			return
 		}
+
 		logs.Logger.Info("still decoding")
 		rpc.From = conn.RemoteAddr().String()
 
