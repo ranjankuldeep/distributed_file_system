@@ -32,7 +32,7 @@ func CopyEncrypt(key []byte, src io.Reader, dst io.Writer) (int, error) {
 		return 0, err
 	}
 
-	iv := make([]byte, block.BlockSize()) // 16 bytes
+	iv := make([]byte, block.BlockSize()) // 16 bytes buffer
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return 0, err
 	}
@@ -87,5 +87,7 @@ func copyStream(stream cipher.Stream, blockSize int, src io.Reader, dst io.Write
 			return 0, err
 		}
 	}
+	// nw reprsents the total number of written bytes
+	// blockSize + data written
 	return nw, nil
 }
