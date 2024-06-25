@@ -73,13 +73,22 @@ func NewFileServer(opts FileServerOpts) *FileServer {
 	}
 }
 
-func (fs *FileServer) Start() error {
+func (fs *FileServer) StartServer() error {
 	if err := fs.Transport.ListenAndAccept(); err != nil {
 		logs.Logger.Errorf("Failed to Listen")
 		return err
 	}
 	fs.bootStrapNetwork() // Non Blocking
 	fs.ReadLoop()         // Blocking
+	return nil
+}
+
+func (fs *FileServer) StopServer() error {
+	if err := fs.Transport.Close(); err != nil {
+		logs.Logger.Error("Failed to stop the Server")
+		return err
+	}
+	logs.Logger.Info("Quiting the File Server")
 	return nil
 }
 

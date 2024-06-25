@@ -3,6 +3,7 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/ranjankuldeep/distributed_file_system/logs"
@@ -102,13 +103,18 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 	}
 	// This read loop here will run indefinitely.
 	// Wating for the message from the connection.
+	// IF the
 	for {
 		rpc := RPC{}
 		// This will populate the rpc struct.
 		err = t.Decoder.Decode(conn, &rpc)
 		if err != nil {
+			if err != io.EOF {
+				logs.Logger.Errorf("error decoding message: %s", err)
+			}
 			return
 		}
+		logs.Logger.Info("still decoding")
 		rpc.From = conn.RemoteAddr().String()
 
 		// Do not handle here, stream data could be very huge, resulting in full memory blockage.
